@@ -22,7 +22,7 @@ export default async function LoginPage({
           Sign in to your account
         </h2>
         <p className="mt-2 text-center text-sm text-stone-600">
-          Use <strong className="font-bold">admin / admin</strong> to test the dashboard.
+          Use <strong className="font-bold">admin / admin123456</strong> to test the dashboard.
         </p>
       </div>
 
@@ -87,7 +87,7 @@ export default async function LoginPage({
                   name="password"
                   type="password"
                   required
-                  defaultValue="admin"
+                  defaultValue="admin123456"
                   className="appearance-none block w-full px-3 py-2 border border-stone-300 rounded-md shadow-sm placeholder-stone-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                 />
               </div>
