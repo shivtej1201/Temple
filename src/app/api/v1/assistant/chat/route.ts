@@ -1,105 +1,117 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
-import { prisma } from '@/lib/db/prisma';
+import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const SYSTEM_INSTRUCTION = `
-You are the Yatra Assistant, an expert AI Temple Guide for the Temple Platform.
-Your job is to help users discover temples, plan pilgrimages, and get accurate darshan and route information.
-IMPORTANT RULES:
-1. ONLY recommend temples that you have fetched from the database using your tools.
-2. If the user asks for temples near a location, you MUST use the find_nearby_temples tool (you might need to geocode the city name to lat/lng first, but we assume the user provides location or you know major cities).
-3. Distinguish between "DATABASE VERIFIED" info and "AI Generated Recommendation".
-4. Be deeply respectful of Hindu traditions and temple customs.
-`;
-
-const tools: FunctionDeclaration[] = [
-  {
-    name: 'find_nearby_temples',
-    description: 'Find temples in the database near a specific latitude and longitude.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        lat: { type: Type.NUMBER, description: 'Latitude' },
-        lng: { type: Type.NUMBER, description: 'Longitude' },
-        radius: { type: Type.NUMBER, description: 'Radius in km' },
-      },
-      required: ['lat', 'lng'],
-    },
-  },
-  {
-    name: 'get_temple_details',
-    description: 'Get detailed information about a specific temple by its slug.',
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        slug: { type: Type.STRING, description: 'The unique slug of the temple' },
-      },
-      required: ['slug'],
-    },
-  },
-];
+// System Instructions to prevent hallucination
+const SYSTEM_INSTRUCTION = `You are the Darshan Platform AI Assistant, helping users plan pilgrimages and find temples. 
+CRITICAL RULES:
+1. You MUST use your tools to query the SQLite database. NEVER invent or hallucinate temple names, locations, routes, or festival dates.
+2. If the tool returns no data, inform the user that the temple or festival is not in the system yet.
+3. Be concise and deeply respectful of Hindu traditions.
+4. For planning a Yatra (trip), ask clarifying questions if the origin, destination, or duration is missing.`;
 
 export async function POST(request: Request) {
   try {
-    const { messages } = await request.json();
+    const { input, previous_interaction_id } = await request.json();
 
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({
-        success: true,
-        response: "The AI Temple Guide is currently offline (GEMINI_API_KEY missing). But I am ready to help you plan your yatra!"
-      });
+    if (!input) {
+      return NextResponse.json({ error: "Missing input" }, { status: 400 });
     }
 
-    // Convert client messages to Gemini format
-    const history = messages.slice(0, -1).map((m: any) => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }]
-    }));
+    const interactionOptions: any = {
+      model: "gemini-3.7-flash",
+      input,
+      system_instruction: SYSTEM_INSTRUCTION,
+      tools: [
+        {
+          function_declarations: [
+            {
+              name: "searchTemples",
+              description: "Search for temples by name, deity, or region. Use this to find temples based on user queries.",
+              parameters: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "Search term like 'Shiva', 'Pune', 'Kashi'"
+                  }
+                },
+                required: ["query"]
+              }
+            },
+            {
+              name: "getFestivals",
+              description: "Search for upcoming festivals",
+              parameters: {
+                type: "object",
+                properties: {
+                  year: {
+                    type: "integer",
+                    description: "The year to search for"
+                  }
+                },
+                required: ["year"]
+              }
+            }
+          ]
+        }
+      ]
+    };
 
-    const currentMessage = messages[messages.length - 1].content;
+    if (previous_interaction_id) {
+      interactionOptions.previous_interaction_id = previous_interaction_id;
+    }
 
-    const chat = ai.chats.create({
-      model: 'gemini-2.5-flash',
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        tools: [{ functionDeclarations: tools }],
-      },
-      history
-    });
+    // Start a non-streaming interaction first, handling the tool execution loop on the server
+    // For a production app we'd stream directly, but to keep this simple and handle tool calls reliably:
+    let response = await ai.interactions.create(interactionOptions);
 
-    let response = await chat.sendMessage({ message: currentMessage });
-
-    // Handle tool calls
-    if (response.functionCalls && response.functionCalls.length > 0) {
-      const call = response.functionCalls[0];
-      let toolResponse = {};
-
-      if (call.name === 'find_nearby_temples') {
-        const { lat, lng, radius } = call.args as any;
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/v1/nearby/temples?lat=${lat}&lng=${lng}&radius=${radius || 25}`);
-        const json = await res.json();
-        toolResponse = json.data || [];
-      } else if (call.name === 'get_temple_details') {
-        const { slug } = call.args as any;
-        const temple = await prisma.temple.findUnique({ where: { slug } });
-        toolResponse = temple || { error: "Temple not found" };
-      }
-
-      response = await chat.sendMessage({
-        message: [{
-          functionResponse: {
-            name: call.name,
-            response: toolResponse
+    // Basic Tool Execution Loop
+    while (response.status === 'requires_action') {
+      const toolCall: any = response.steps.find((s: any) => s.type === 'function_call');
+      if (toolCall) {
+        const { id, name, arguments: args } = toolCall;
+        
+        let toolResult = {};
+        
+        try {
+          if (name === 'searchTemples') {
+            // Forward to our internal Search API
+            const internalRes = await fetch(`${new URL(request.url).origin}/api/v1/search?q=${encodeURIComponent(args.query)}`);
+            const data = await internalRes.json();
+            toolResult = data.data.temples;
+          } else if (name === 'getFestivals') {
+             const internalRes = await fetch(`${new URL(request.url).origin}/api/v1/festivals?year=${args.year}`);
+             const data = await internalRes.json();
+             toolResult = data.data;
+          } else {
+             toolResult = { error: "Unknown tool" };
           }
-        }]
-      });
+        } catch (e) {
+          toolResult = { error: "Failed to execute tool" };
+        }
+
+        // Send tool result back
+        response = await ai.interactions.create({
+          model: "gemini-3.7-flash",
+          previous_interaction_id: response.id,
+          input: {
+            type: "function_result",
+            call_id: id,
+            name: name,
+            result: toolResult
+          } as any
+        });
+      } else {
+        break;
+      }
     }
 
-    return NextResponse.json({
-      success: true,
-      response: response.text
+    return NextResponse.json({ 
+      success: true, 
+      text: response.output_text, 
+      interaction_id: response.id 
     });
 
   } catch (error: any) {

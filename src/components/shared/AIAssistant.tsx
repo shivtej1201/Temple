@@ -3,6 +3,46 @@ import { useState } from 'react';
 
 export default function AIAssistant() {
   const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<any[]>([{
+    role: "assistant", 
+    content: "Namaste! I am your AI temple guide. I have context on our verified temples, upcoming festivals, and pilgrimage routes. \n\nHow can I help you plan your journey today?"
+  }]);
+  const [loading, setLoading] = useState(false);
+  const [interactionId, setInteractionId] = useState<string | null>(null);
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+
+    const userMessage = input.trim();
+    setInput("");
+    setMessages(prev => [...prev, { role: "user", content: userMessage }]);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/v1/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          input: userMessage, 
+          previous_interaction_id: interactionId 
+        })
+      });
+
+      const data = await res.json();
+      
+      if (data.success) {
+        setMessages(prev => [...prev, { role: "assistant", content: data.text }]);
+        if (data.interaction_id) setInteractionId(data.interaction_id);
+      } else {
+        setMessages(prev => [...prev, { role: "assistant", content: "Apologies, I encountered an error connecting to my knowledge base." }]);
+      }
+    } catch (e) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Apologies, there was a network error." }]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -28,21 +68,41 @@ export default function AIAssistant() {
           </div>
           
           <div className="flex-1 p-4 overflow-y-auto bg-stone-50 flex flex-col gap-4">
-             <div className="bg-white p-3 rounded-lg rounded-tl-none shadow-sm border border-stone-100 max-w-[85%] text-sm text-stone-700">
-               Namaste! I am your AI temple guide. I have context on 12,000+ temples, upcoming festivals, and pilgrimage routes. 
-               <br/><br/>
-               How can I help you plan your journey today?
-             </div>
+            {messages.map((m, idx) => (
+              <div 
+                key={idx} 
+                className={`p-3 rounded-lg shadow-sm border max-w-[85%] text-sm ${
+                  m.role === 'user' 
+                    ? 'bg-orange-600 text-white self-end rounded-tr-none border-orange-700' 
+                    : 'bg-white text-stone-700 self-start rounded-tl-none border-stone-100'
+                }`}
+                style={{ whiteSpace: 'pre-wrap' }}
+              >
+                {m.content}
+              </div>
+            ))}
+            {loading && (
+               <div className="bg-white p-3 rounded-lg rounded-tl-none shadow-sm border border-stone-100 max-w-[85%] text-sm text-stone-500 self-start flex gap-1">
+                 <span className="animate-bounce">●</span><span className="animate-bounce delay-100">●</span><span className="animate-bounce delay-200">●</span>
+               </div>
+            )}
           </div>
           
           <div className="p-3 border-t border-stone-200 bg-white">
             <div className="relative">
               <input 
                 type="text" 
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendMessage()}
                 placeholder="Ask about a temple or route..." 
                 className="w-full bg-stone-100 border-none rounded-full py-2.5 pl-4 pr-10 text-sm focus:ring-2 focus:ring-orange-500"
               />
-              <button className="absolute right-2 top-1.5 w-7 h-7 bg-orange-600 rounded-full flex items-center justify-center text-white hover:bg-orange-700">
+              <button 
+                onClick={sendMessage}
+                disabled={loading}
+                className="absolute right-2 top-1.5 w-7 h-7 bg-orange-600 rounded-full flex items-center justify-center text-white hover:bg-orange-700 disabled:opacity-50"
+              >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
               </button>
             </div>

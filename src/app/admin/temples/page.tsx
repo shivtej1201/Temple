@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 
-export default async function AdminTemplesPage() {
-  // Fetch temples from the database (will error nicely if DB isn't connected yet)
+export default async function AdminTemplesPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const params = await searchParams;
+  const tab = params.tab || 'all';
+  
   let temples: any[] = [];
   let dbError = false;
 
   try {
     temples = await prisma.temple.findMany({
+      where: tab === 'pending' ? { isVerified: false } : undefined,
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
@@ -28,11 +31,26 @@ export default async function AdminTemplesPage() {
         </Link>
       </div>
 
+      <div className="flex gap-4 border-b border-stone-200 mb-6">
+        <Link 
+          href="/admin/temples?tab=all" 
+          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${tab === 'all' ? 'border-blue-600 text-blue-600' : 'border-transparent text-stone-500 hover:text-stone-700'}`}
+        >
+          All Temples
+        </Link>
+        <Link 
+          href="/admin/temples?tab=pending" 
+          className={`pb-2 px-1 border-b-2 font-medium text-sm transition-colors ${tab === 'pending' ? 'border-blue-600 text-blue-600' : 'border-transparent text-stone-500 hover:text-stone-700'}`}
+        >
+          Verification Queue
+        </Link>
+      </div>
+
       {dbError && (
         <div className="bg-red-50 text-red-700 p-4 rounded-md mb-6 border border-red-200">
           <h3 className="font-semibold">Database Connection Error</h3>
           <p className="text-sm mt-1">
-            Could not connect to the database. Please ensure your PostgreSQL instance is running and the DATABASE_URL in .env is correct.
+            Could not connect to the database.
           </p>
         </div>
       )}
@@ -52,7 +70,7 @@ export default async function AdminTemplesPage() {
             {temples.length === 0 && !dbError ? (
               <tr>
                 <td colSpan={5} className="p-8 text-center text-gray-500">
-                  No temples found. Click "Add Temple" to create one.
+                  No temples found matching your criteria.
                 </td>
               </tr>
             ) : (
@@ -82,6 +100,9 @@ export default async function AdminTemplesPage() {
                   <td className="p-4 text-right">
                     <Link href={`/admin/temples/${temple.id}/edit`} className="text-blue-600 hover:text-blue-900 font-medium text-sm mr-4">
                       Edit
+                    </Link>
+                    <Link href={`/admin/temples/${temple.id}/verify`} className="text-green-600 hover:text-green-900 font-medium text-sm">
+                      {temple.isVerified ? 'Review' : 'Verify'}
                     </Link>
                   </td>
                 </tr>

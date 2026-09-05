@@ -1,15 +1,54 @@
+'use client';
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { prisma } from "@/lib/db/prisma";
 
-export const revalidate = 0;
+export default function ThreadsPage() {
+  const [threads, setThreads] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [category, setCategory] = useState("All Discussions");
+  const [sort, setSort] = useState("latest");
 
-export default async function ThreadsPage() {
-  const threads = await prisma.thread.findMany({
-    where: { status: "PUBLISHED" },
-    include: { user: true },
-    orderBy: { createdAt: 'desc' },
-    take: 20
-  });
+  useEffect(() => {
+    const fetchThreads = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (searchQuery) params.set("search", searchQuery);
+        if (category) params.set("category", category);
+        if (sort) params.set("sort", sort);
+
+        const res = await fetch(`/api/v1/discussions?${params.toString()}`);
+        const json = await res.json();
+        if (json.success) {
+          setThreads(json.data);
+        } else {
+          setThreads([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch threads", error);
+        setThreads([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const debounce = setTimeout(() => {
+      fetchThreads();
+    }, 300);
+
+    return () => clearTimeout(debounce);
+  }, [searchQuery, category, sort]);
+
+  const categories = [
+    "All Discussions",
+    "Temple Guidance",
+    "Festival Preparation",
+    "Travel & Routes",
+    "Rituals & History"
+  ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -24,6 +63,8 @@ export default async function ThreadsPage() {
             <input 
               type="text" 
               placeholder="Search discussions..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-4 pr-10 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-64"
             />
           </div>
@@ -39,21 +80,49 @@ export default async function ThreadsPage() {
           <div>
             <h3 className="font-bold text-stone-900 mb-3">Categories</h3>
             <ul className="space-y-2 text-sm text-stone-600">
-              <li><Link href="#" className="font-semibold text-orange-600">All Discussions</Link></li>
-              <li><Link href="#" className="hover:text-orange-600">Temple Guidance</Link></li>
-              <li><Link href="#" className="hover:text-orange-600">Festival Preparation</Link></li>
-              <li><Link href="#" className="hover:text-orange-600">Travel & Routes</Link></li>
-              <li><Link href="#" className="hover:text-orange-600">Rituals & History</Link></li>
+              {categories.map((c) => (
+                <li key={c}>
+                  <button 
+                    onClick={() => setCategory(c)}
+                    className={`hover:text-orange-600 transition-colors ${category === c ? 'font-semibold text-orange-600' : ''}`}
+                  >
+                    {c}
+                  </button>
+                </li>
+              ))}
             </ul>
+          </div>
+          
+          <div>
+            <h3 className="font-bold text-stone-900 mb-3">Sort By</h3>
+            <select 
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="w-full bg-white border border-stone-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              <option value="latest">Latest</option>
+              <option value="trending">Trending</option>
+              <option value="popular">Most Popular</option>
+            </select>
           </div>
         </div>
 
         {/* Threads List */}
         <div className="flex-1 space-y-4">
-          {threads.length === 0 && (
-            <p className="text-stone-500">No discussions found.</p>
+          {loading && (
+             <div className="py-8 text-center text-stone-500">
+                <svg className="w-6 h-6 animate-spin text-orange-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+             </div>
           )}
-          {threads.map((thread) => (
+          
+          {!loading && threads.length === 0 && (
+            <p className="text-stone-500 py-8 text-center bg-stone-50 rounded-xl border border-stone-200 border-dashed">No discussions found matching your criteria.</p>
+          )}
+
+          {!loading && threads.map((thread) => (
             <div key={thread.id} className="bg-white rounded-xl shadow-sm border border-stone-200 p-5 hover:border-orange-300 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <Link href={`/threads/${thread.id}`} className="text-lg font-bold text-stone-900 hover:text-orange-600">
@@ -70,10 +139,14 @@ export default async function ThreadsPage() {
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 font-bold">
-                      {thread.user.name?.[0] || 'U'}
+                    <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 font-bold overflow-hidden">
+                      {thread.user?.avatarUrl ? (
+                         <img src={thread.user.avatarUrl} alt={thread.user.name} className="w-full h-full object-cover" />
+                      ) : (
+                         thread.user?.name?.[0] || 'U'
+                      )}
                     </div>
-                    <span className="font-medium text-stone-700">{thread.user.name || 'Anonymous'}</span>
+                    <span className="font-medium text-stone-700">{thread.user?.name || 'Anonymous'}</span>
                   </div>
                 </div>
                 

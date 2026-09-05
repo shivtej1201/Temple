@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
+export const revalidate = 3600; // Cache this route segment for 1 hour
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const region = searchParams.get('region');

@@ -1,16 +1,38 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { Metadata, ResolvingMetadata } from "next";
 import { GooglePlacesService } from "@/services/google/places.service";
 import { NearbyTemples } from "@/components/temple/NearbyTemples";
 import { NearbyServices } from "@/components/temple/NearbyServices";
 import { TempleMap } from "@/components/map/TempleMap";
 
+type Props = {
+  params: Promise<{ slug: string }>;
+};
+
+export async function generateMetadata(
+  { params }: Props,
+  parent: ResolvingMetadata
+): Promise<Metadata> {
+  const { slug } = await params;
+  const templeData = await GooglePlacesService.getPlaceDetails(slug);
+  
+  if (!templeData) return { title: 'Temple Not Found' };
+
+  return {
+    title: `${templeData.name} - Darshan`,
+    description: templeData.localTempleData?.description || `Plan your visit to ${templeData.name} located at ${templeData.address}. Find timings, darshan details, and nearby attractions.`,
+    openGraph: {
+      title: `${templeData.name} | Darshan Temple Platform`,
+      images: templeData.image?.url ? [templeData.image.url] : [],
+    },
+  };
+}
+
 export default async function TempleDetailPage({
   params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+}: Props) {
   const { slug } = await params;
   
   const templeData = await GooglePlacesService.getPlaceDetails(slug);
@@ -32,8 +54,30 @@ export default async function TempleDetailPage({
 
   const heroImage = templeData.image?.url || "https://images.unsplash.com/photo-1598155523122-3842334d6c1f?q=80&w=2070";
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'HinduTemple',
+    name: templeName,
+    image: heroImage,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: templeAddress,
+    },
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude,
+      longitude
+    },
+    telephone: phone || undefined,
+    url: website || undefined,
+  };
+
   return (
     <div className="bg-stone-50 min-h-screen pb-20">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Hero Image */}
       <div className="h-64 sm:h-96 w-full bg-stone-300 relative">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroImage})` }}>

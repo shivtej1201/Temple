@@ -1,55 +1,51 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+export const revalidate = 3600;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const isMajor = searchParams.get('isMajor') === 'true';
-  const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit') as string) : 50;
+  const yearParam = searchParams.get('year');
+  const regionParam = searchParams.get('region');
+  const deityParam = searchParams.get('deity');
 
   try {
-    const festivals = await prisma.festival.findMany({
-      where: {
-        ...(searchParams.has('isMajor') ? { isMajor } : {})
-      },
+    const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();
+
+    const whereClause: any = { year };
+
+    if (regionParam && regionParam !== 'All Regions') {
+      whereClause.region = {
+        name: { contains: regionParam }
+      };
+    }
+
+    if (deityParam && deityParam !== 'All Deities') {
+      whereClause.festival = {
+        ...whereClause.festival,
+        deity: {
+          name: { contains: deityParam }
+        }
+      };
+    }
+
+    const occurrences = await prisma.festivalOccurrence.findMany({
+      where: whereClause,
       include: {
-        deity: true
+        festival: {
+          include: {
+            deity: true
+          }
+        },
+        region: true
       },
-      take: limit,
-      orderBy: { name: 'asc' }
-    });
-
-    return NextResponse.json({ success: true, data: festivals });
-  } catch (error) {
-    console.error("Error fetching festivals:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch festivals" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    
-    // In a real app, validate body with Zod and check admin authentication here
-
-    const newFestival = await prisma.festival.create({
-      data: {
-        name: body.name,
-        slug: body.slug,
-        description: body.description,
-        deityId: body.deityId,
-        isMajor: body.isMajor || false,
+      orderBy: {
+        startDate: 'asc'
       }
     });
 
-    return NextResponse.json({ success: true, data: newFestival }, { status: 201 });
+    return NextResponse.json({ success: true, data: occurrences });
   } catch (error) {
-    console.error("Error creating festival:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to create festival" },
-      { status: 500 }
-    );
+    console.error("Error fetching festivals:", error);
+    return NextResponse.json({ success: false, error: 'Failed to fetch festivals' }, { status: 500 });
   }
 }

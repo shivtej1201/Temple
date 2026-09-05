@@ -114,15 +114,23 @@ export default async function PilgrimageDetailPage({
                 <ul className="space-y-3 text-sm">
                   <li className="flex justify-between border-b border-stone-100 pb-2">
                     <span className="text-stone-500">Duration</span>
-                    <span className="font-semibold text-stone-900">{pilgrimage.durationDays} Days</span>
+                    <span className="font-semibold text-stone-900">{pilgrimage.durationDays || '?'} Days</span>
+                  </li>
+                  <li className="flex justify-between border-b border-stone-100 pb-2">
+                    <span className="text-stone-500">Difficulty</span>
+                    <span className="font-semibold text-stone-900">{pilgrimage.difficulty || 'Unknown'}</span>
                   </li>
                   <li className="flex justify-between border-b border-stone-100 pb-2">
                     <span className="text-stone-500">Total Temples</span>
                     <span className="font-semibold text-stone-900">{pilgrimage.sequence.length}</span>
                   </li>
+                  <li className="flex justify-between border-b border-stone-100 pb-2">
+                    <span className="text-stone-500">Best Season</span>
+                    <span className="font-semibold text-stone-900">Oct - March</span>
+                  </li>
                   <li className="flex justify-between pb-2">
                     <span className="text-stone-500">Estimated Distance</span>
-                    <span className="font-semibold text-stone-900">~650 km</span>
+                    <span className="font-semibold text-stone-900">Dependent on starting point</span>
                   </li>
                 </ul>
               </div>

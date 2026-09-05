@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 import AIAssistant from "@/components/shared/AIAssistant";
+import GlobalSearch from "@/components/layout/GlobalSearch";
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
@@ -30,13 +31,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="hidden md:block relative">
-                <input 
-                  type="text" 
-                  placeholder="Search temples, regions..." 
-                  className="pl-4 pr-10 py-2 border border-stone-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 w-64"
-                />
-              </div>
+              <GlobalSearch />
               <Link href="/login" className="text-sm font-medium text-stone-700 hover:text-stone-900">
                 Log in
               </Link>
