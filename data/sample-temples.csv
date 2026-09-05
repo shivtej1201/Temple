@@ -1,0 +1,5 @@
+name,slug,description,address,latitude,longitude,city,state,templeType,isVerified
+Meenakshi Amman Temple,meenakshi-amman,Historic Hindu temple located on the southern bank of the Vaigai River.,Madurai Main, Madurai, Tamil Nadu 625001,9.9195,78.1193,Madurai,Tamil Nadu,Shakti Peetha,true
+Kedarnath Temple,kedarnath-temple,One of the twelve Jyotirlingas of Lord Shiva set in the Garhwal Himalayas.,Kedarnath, Uttarakhand 246445,30.7352,79.0669,Kedarnath,Uttarakhand,Jyotirlinga,true
+Somnath Temple,somnath-temple,First among the twelve Jyotirlinga shrines of Shiva.,Prabhas Patan, Gujarat 362268,20.8880,70.4010,Veraval,Gujarat,Jyotirlinga,true
+Unverified Local Temple,unverified-temple,A small local shrine pending admin review.,Pune, Maharashtra,18.5204,73.8567,Pune,Maharashtra,Local,false
