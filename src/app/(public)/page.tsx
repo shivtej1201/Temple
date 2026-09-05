@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
+import TemplesNearMe from "@/components/temple/TemplesNearMe";
 
 export default async function HomePage() {
   // We'll fetch data here once the DB is populated.
@@ -65,6 +66,9 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* Near Me Section */}
+      <TemplesNearMe />
 
       {/* Upcoming Festivals Section */}
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-orange-50 w-full">

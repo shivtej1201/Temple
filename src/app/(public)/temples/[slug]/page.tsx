@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { prisma } from "@/lib/db/prisma";
+import { GooglePlacesService } from "@/services/google/places.service";
 import { NearbyTemples } from "@/components/temple/NearbyTemples";
 import { NearbyServices } from "@/components/temple/NearbyServices";
 import { TempleMap } from "@/components/map/TempleMap";
@@ -13,64 +13,24 @@ export default async function TempleDetailPage({
 }) {
   const { slug } = await params;
   
-  const isPlaceId = slug.startsWith('p_');
-  const lookupId = isPlaceId ? slug.replace('p_', '') : slug;
+  const templeData = await GooglePlacesService.getPlaceDetails(slug);
 
-  let localTemple = await prisma.temple.findFirst({
-    where: isPlaceId ? { googlePlaceId: lookupId } : { slug: lookupId },
-    include: {
-      primaryDeity: true,
-      region: true,
-      city: true,
-      darshans: { where: { isActive: true } },
-      festivals: { include: { festival: true } },
-      events: true,
-      deities: { include: { deity: true } }
-    }
-  });
-
-  if (!localTemple && !isPlaceId) {
+  if (!templeData) {
     notFound();
   }
 
-  // Google Places Dynamic Data Layer
-  let googleData: any = null;
-  const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_SERVER_KEY;
-  const placeIdToFetch = localTemple?.googlePlaceId || (isPlaceId ? lookupId : null);
-  
-  if (GOOGLE_API_KEY && placeIdToFetch) {
-    try {
-      const res = await fetch(`https://places.googleapis.com/v1/places/${placeIdToFetch}`, {
-        headers: {
-          'X-Goog-Api-Key': GOOGLE_API_KEY,
-          'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,photos,regularOpeningHours,internationalPhoneNumber,websiteUri',
-          'X-Goog-Maps-Solution-ID': 'gmp_git_agentskills_v1'
-        }
-      });
-      if (res.ok) {
-        googleData = await res.json();
-      }
-    } catch (err) {
-      console.error("Failed to fetch Google Places data:", err);
-    }
-  }
+  const localTemple = templeData.localTempleData;
 
-  // Merge Data
-  const templeName = googleData?.displayName?.text || localTemple?.name;
-  const templeAddress = googleData?.formattedAddress || localTemple?.region?.name;
-  const templeRating = googleData?.rating;
-  const templeReviewsCount = googleData?.userRatingCount;
-  const latitude = googleData?.location?.latitude || localTemple?.latitude;
-  const longitude = googleData?.location?.longitude || localTemple?.longitude;
-  const website = googleData?.websiteUri || localTemple?.officialWebsite;
-  const phone = googleData?.internationalPhoneNumber || localTemple?.officialPhone;
+  const templeName = templeData.name;
+  const templeAddress = templeData.address;
+  const templeRating = templeData.rating;
+  const templeReviewsCount = templeData.ratingCount;
+  const latitude = templeData.location.latitude;
+  const longitude = templeData.location.longitude;
+  const website = templeData.websiteUri;
+  const phone = templeData.internationalPhoneNumber;
 
-  if (!templeName) {
-    notFound();
-  }
-
-  // Use Google Photo if available (requires a separate proxy to fetch actual image, so we just use a placeholder for now if Google, or use Unsplash)
-  const heroImage = "https://images.unsplash.com/photo-1598155523122-3842334d6c1f?q=80&w=2070";
+  const heroImage = templeData.image?.url || "https://images.unsplash.com/photo-1598155523122-3842334d6c1f?q=80&w=2070";
 
   return (
     <div className="bg-stone-50 min-h-screen pb-20">
@@ -86,7 +46,7 @@ export default async function TempleDetailPage({
                  {localTemple.templeType}
                </span>
              )}
-             {localTemple?.isVerified && (
+             {templeData.verificationStatus === "VERIFIED" && (
                <span className="bg-green-600 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-sm flex items-center gap-1">
                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
                  Verified
@@ -146,9 +106,9 @@ export default async function TempleDetailPage({
                   <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                   Live Opening Hours
                 </h3>
-                {googleData?.regularOpeningHours?.weekdayDescriptions ? (
+                {templeData.regularOpeningHours?.weekdayDescriptions ? (
                   <ul className="space-y-3 text-sm text-stone-700">
-                    {googleData.regularOpeningHours.weekdayDescriptions.map((desc: string, i: number) => {
+                    {templeData.regularOpeningHours.weekdayDescriptions.map((desc: string, i: number) => {
                       const [day, hours] = desc.split(': ');
                       return (
                         <li key={i} className="flex justify-between border-b border-stone-100 pb-2">
@@ -193,7 +153,7 @@ export default async function TempleDetailPage({
           <NearbyTemples 
             lat={latitude || null} 
             lng={longitude || null} 
-            currentTempleId={localTemple?.id || ''} 
+            currentTempleId={templeData.googlePlaceId} 
           />
 
           {/* Nearby Amenities (Monetization hooks) */}
@@ -240,7 +200,7 @@ export default async function TempleDetailPage({
                 </div>
                 <div>
                   <p className="font-semibold text-stone-900">Primary Deity</p>
-                  <p className="text-stone-600">{localTemple?.primaryDeity?.name || "Unknown"}</p>
+                  <p className="text-stone-600">{templeData.deity?.name || localTemple?.primaryDeity?.name || "Unknown"}</p>
                 </div>
               </div>
               
@@ -250,7 +210,7 @@ export default async function TempleDetailPage({
                 </div>
                 <div>
                   <p className="font-semibold text-stone-900">Region</p>
-                  <p className="text-stone-600">{localTemple?.region?.name || 'Unknown'}</p>
+                  <p className="text-stone-600">{templeData.location?.city || localTemple?.region?.name || 'Unknown'}</p>
                 </div>
               </div>
 

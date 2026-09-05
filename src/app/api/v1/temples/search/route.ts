@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import { handleApiError, ApiError } from '@/lib/api/error';
 import { GooglePlacesService } from '@/services/google/places.service';
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
-    const body = await request.json();
-    const { query } = body;
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('q');
 
     if (!query) {
       throw new ApiError('MISSING_QUERY', 'Query is required', 400);
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      results
+      data: results
     });
   } catch (error: any) {
     return handleApiError(error, request);

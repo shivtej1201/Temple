@@ -161,5 +161,61 @@ export const GooglePlacesService = {
       });
       return mapToStandardTempleResponse(place, localTemple);
     }));
+  },
+
+  async getPlaceDetails(slugOrId: string) {
+    if (!GOOGLE_API_KEY) throw new Error("Google Maps API Key is missing");
+
+    const isPlaceId = slugOrId.startsWith('p_') || !slugOrId.includes('-');
+    let lookupId = slugOrId.replace('p_', '');
+
+    let localTemple = await prisma.temple.findFirst({
+      where: isPlaceId ? { googlePlaceId: lookupId } : { slug: lookupId },
+      include: { 
+        primaryDeity: true,
+        region: true,
+        city: true,
+        darshans: { where: { isActive: true } },
+        festivals: { include: { festival: true } },
+        events: true,
+        deities: { include: { deity: true } }
+      }
+    });
+
+    const placeIdToFetch = localTemple?.googlePlaceId || lookupId;
+
+    let googleData: any = null;
+    try {
+      const res = await fetch(`https://places.googleapis.com/v1/places/${placeIdToFetch}`, {
+        method: 'GET',
+        headers: {
+          ...DEFAULT_HEADERS,
+          'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,photos,regularOpeningHours,internationalPhoneNumber,websiteUri'
+        }
+      });
+      if (res.ok) {
+        googleData = await res.json();
+      } else {
+        const error = await res.json();
+        console.warn("Failed to fetch Google Places data:", error);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch Google Places data:", err);
+    }
+
+    // If neither exists, it's a 404
+    if (!localTemple && !googleData) {
+      return null;
+    }
+
+    const standardResponse = mapToStandardTempleResponse(googleData || { id: placeIdToFetch }, localTemple);
+
+    return {
+      ...standardResponse,
+      localTempleData: localTemple, // Include rich local relational data
+      regularOpeningHours: googleData?.regularOpeningHours,
+      internationalPhoneNumber: googleData?.internationalPhoneNumber,
+      websiteUri: googleData?.websiteUri
+    };
   }
 };
