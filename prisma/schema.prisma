@@ -124,7 +124,6 @@ model Temple {
   stateId  String?
   cityId   String?
 
-  address   String?
   latitude      Float?
   longitude     Float?
   googlePlaceId String?
@@ -146,8 +145,6 @@ model Temple {
   lastVerifiedAt DateTime?
   sourceName     String?
 
-  openingTime          String?
-  closingTime          String?
   bestTimeToVisit      String?
   averageVisitDuration String?
 
@@ -169,10 +166,8 @@ model Temple {
   primaryDeity Deity?  @relation("PrimaryDeity", fields: [primaryDeityId], references: [id])
 
   deities  TempleDeity[]
-  images   TempleImage[]
-  timings  TempleTiming[]
   darshans DarshanOption[]
-
+  
   festivals   FestivalTemple[]
   events       TempleEvent[]
   pilgrimages  PilgrimageTemple[]
@@ -197,37 +192,6 @@ model TempleDeity {
 
   @@id([templeId, deityId])
 }
-
-model TempleImage {
-  id           String   @id @default(uuid())
-  templeId     String  
-  url          String
-  thumbnailUrl String?
-  caption      String?
-  altText      String?
-  credit       String?
-  sourceUrl    String?
-  licenseType  String?
-  isPrimary    Boolean  @default(false)
-  sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-
-  temple Temple @relation(fields: [templeId], references: [id], onDelete: Cascade)
-}
-
-model TempleTiming {
-  id           String  @id @default(uuid())
-  templeId     String 
-  dayOfWeek    Int // 0 = Sunday, 6 = Saturday
-  morningOpen  String?
-  morningClose String?
-  eveningOpen  String?
-  eveningClose String?
-  specialNote  String?
-
-  temple Temple @relation(fields: [templeId], references: [id], onDelete: Cascade)
-}
-
 model DarshanOption {
   id                 String      @id @default(uuid())
   templeId           String     

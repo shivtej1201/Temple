@@ -11,6 +11,15 @@ export default function CreateJourneyPage() {
           <div className="md:col-span-1 space-y-4">
             <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
               <h2 className="font-bold text-lg mb-4">Your Stops</h2>
+              <div className="mb-4">
+                <label className="text-sm font-medium text-stone-700 block mb-1">Search Along Route</label>
+                <input type="text" placeholder="From (e.g. Pune)" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 mb-2" />
+                <input type="text" placeholder="To (e.g. Nashik)" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 mb-2" />
+                <button className="w-full bg-stone-100 text-stone-800 text-sm font-medium py-2 rounded-md hover:bg-stone-200 transition-colors">
+                  Find Temples on Route
+                </button>
+              </div>
+              <hr className="my-4 border-stone-100" />
               <div className="space-y-3">
                 <div className="p-3 border border-stone-200 rounded-xl bg-stone-50 text-stone-500 text-sm text-center border-dashed">
                   Search and add temples to start planning...

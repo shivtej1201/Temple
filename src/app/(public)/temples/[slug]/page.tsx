@@ -13,80 +13,99 @@ export default async function TempleDetailPage({
 }) {
   const { slug } = await params;
   
-  let temple;
-  try {
-    temple = await prisma.temple.findUnique({
-      where: { slug: slug },
-      include: {
-        primaryDeity: true,
-        region: true,
-        city: true,
-        images: { orderBy: { sortOrder: 'asc' } },
-        timings: true,
-        darshans: { where: { isActive: true } },
-        festivals: { include: { festival: true } },
-        events: true,
-        deities: { include: { deity: true } }
-      }
-    });
-  } catch (error) {
-    console.error("DB Error fetching temple:", error);
+  const isPlaceId = slug.startsWith('p_');
+  const lookupId = isPlaceId ? slug.replace('p_', '') : slug;
+
+  let localTemple = await prisma.temple.findFirst({
+    where: isPlaceId ? { googlePlaceId: lookupId } : { slug: lookupId },
+    include: {
+      primaryDeity: true,
+      region: true,
+      city: true,
+      darshans: { where: { isActive: true } },
+      festivals: { include: { festival: true } },
+      events: true,
+      deities: { include: { deity: true } }
+    }
+  });
+
+  if (!localTemple && !isPlaceId) {
+    notFound();
   }
 
-  if (!temple) {
-    // If DB is offline, show a nice mock page for development demonstration
-    if (slug === "kashi-vishwanath") {
-      temple = {
-        name: "Kashi Vishwanath",
-        primaryDeity: { name: "Shiva" },
-        region: { name: "Uttar Pradesh" },
-        address: "Varanasi, UP",
-        description: "One of the most famous Hindu temples dedicated to Lord Shiva, located in Varanasi.",
-        history: "The temple has been destroyed and rebuilt several times over the centuries. The current structure was built by Ahilya Bai Holkar in 1780.",
-        templeType: "JYOTIRLINGA",
-        images: [{ url: "https://images.unsplash.com/photo-1598155523122-3842334d6c1f?q=80&w=2070", altText: "Kashi Vishwanath Temple" }],
-        timings: [{ dayOfWeek: 0, morningOpen: "03:00", morningClose: "11:00", eveningOpen: "12:00", eveningClose: "23:00" }],
-        darshans: [{ name: "Mangala Aarti", type: "SPECIAL", price: 500, currency: "INR" }],
-        isVerified: true,
-        id: "mock-kashi"
-      };
-    } else {
-      notFound();
+  // Google Places Dynamic Data Layer
+  let googleData: any = null;
+  const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_SERVER_KEY;
+  const placeIdToFetch = localTemple?.googlePlaceId || (isPlaceId ? lookupId : null);
+  
+  if (GOOGLE_API_KEY && placeIdToFetch) {
+    try {
+      const res = await fetch(`https://places.googleapis.com/v1/places/${placeIdToFetch}`, {
+        headers: {
+          'X-Goog-Api-Key': GOOGLE_API_KEY,
+          'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,photos,regularOpeningHours,internationalPhoneNumber,websiteUri',
+          'X-Goog-Maps-Solution-ID': 'gmp_git_agentskills_v1'
+        }
+      });
+      if (res.ok) {
+        googleData = await res.json();
+      }
+    } catch (err) {
+      console.error("Failed to fetch Google Places data:", err);
     }
   }
+
+  // Merge Data
+  const templeName = googleData?.displayName?.text || localTemple?.name;
+  const templeAddress = googleData?.formattedAddress || localTemple?.region?.name;
+  const templeRating = googleData?.rating;
+  const templeReviewsCount = googleData?.userRatingCount;
+  const latitude = googleData?.location?.latitude || localTemple?.latitude;
+  const longitude = googleData?.location?.longitude || localTemple?.longitude;
+  const website = googleData?.websiteUri || localTemple?.officialWebsite;
+  const phone = googleData?.internationalPhoneNumber || localTemple?.officialPhone;
+
+  if (!templeName) {
+    notFound();
+  }
+
+  // Use Google Photo if available (requires a separate proxy to fetch actual image, so we just use a placeholder for now if Google, or use Unsplash)
+  const heroImage = "https://images.unsplash.com/photo-1598155523122-3842334d6c1f?q=80&w=2070";
 
   return (
     <div className="bg-stone-50 min-h-screen pb-20">
       {/* Hero Image */}
       <div className="h-64 sm:h-96 w-full bg-stone-300 relative">
-        {temple.images && temple.images.length > 0 ? (
-          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${temple.images[0].url})` }}>
-            <div className="absolute inset-0 bg-black/40"></div>
-          </div>
-        ) : (
-          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(https://images.unsplash.com/photo-1570168007204-dfb528c6958f?q=80&w=2070)` }}>
-            <div className="absolute inset-0 bg-black/50"></div>
-          </div>
-        )}
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroImage})` }}>
+          <div className="absolute inset-0 bg-black/40"></div>
+        </div>
         <div className="absolute bottom-0 left-0 w-full p-8 max-w-7xl mx-auto flex flex-col justify-end h-full text-white">
           <div className="flex gap-2 mb-3">
-             {temple.templeType && (
+             {localTemple?.templeType && (
                <span className="bg-orange-600 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-sm">
-                 {temple.templeType}
+                 {localTemple.templeType}
                </span>
              )}
-             {temple.isVerified && (
+             {localTemple?.isVerified && (
                <span className="bg-green-600 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-sm flex items-center gap-1">
                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
                  Verified
                </span>
              )}
           </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold mb-2 text-white">{temple.name}</h1>
-          <p className="text-lg text-stone-200 flex items-center gap-2">
+          <h1 className="text-4xl md:text-5xl font-extrabold mb-2 text-white">{templeName}</h1>
+          <p className="text-lg text-stone-200 flex items-center gap-2 mb-2">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            {temple.address || temple.region?.name}
+            {templeAddress}
           </p>
+          {templeRating && (
+            <div className="flex items-center gap-2">
+              <span className="bg-yellow-400 text-yellow-900 px-2 py-1 rounded text-sm font-bold flex items-center gap-1">
+                ★ {templeRating}
+              </span>
+              <span className="text-sm text-stone-300">({templeReviewsCount} Google reviews)</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -98,15 +117,22 @@ export default async function TempleDetailPage({
           <section className="bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
             <h2 className="text-2xl font-bold text-stone-900 mb-4">About</h2>
             <p className="text-stone-700 leading-relaxed mb-6">
-              {temple.description}
+              {localTemple?.description || 'Information about this temple is dynamically retrieved from Google Maps.'}
             </p>
-            {temple.history && (
+            {localTemple?.history && (
               <>
                 <h3 className="text-lg font-bold text-stone-900 mb-2">History & Significance</h3>
                 <p className="text-stone-700 leading-relaxed">
-                  {temple.history}
+                  {localTemple.history}
                 </p>
               </>
+            )}
+            
+            {(website || phone) && (
+              <div className="mt-6 flex gap-4 text-sm">
+                {website && <a href={website} target="_blank" rel="noreferrer" className="text-orange-600 hover:underline">Official Website</a>}
+                {phone && <span className="text-stone-600">Phone: {phone}</span>}
+              </div>
             )}
           </section>
           
@@ -118,30 +144,33 @@ export default async function TempleDetailPage({
               <div>
                 <h3 className="font-bold text-stone-900 mb-4 flex items-center gap-2">
                   <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  Daily Schedule
+                  Live Opening Hours
                 </h3>
-                {temple.timings && temple.timings.length > 0 ? (
+                {googleData?.regularOpeningHours?.weekdayDescriptions ? (
                   <ul className="space-y-3 text-sm text-stone-700">
-                    {temple.timings.map((t: any, i: number) => (
-                      <li key={i} className="flex justify-between border-b border-stone-100 pb-2">
-                        <span className="font-medium">Everyday</span>
-                        <span>{t.morningOpen} - {t.eveningClose}</span>
-                      </li>
-                    ))}
+                    {googleData.regularOpeningHours.weekdayDescriptions.map((desc: string, i: number) => {
+                      const [day, hours] = desc.split(': ');
+                      return (
+                        <li key={i} className="flex justify-between border-b border-stone-100 pb-2">
+                          <span className="font-medium">{day}</span>
+                          <span>{hours}</span>
+                        </li>
+                      )
+                    })}
                   </ul>
                 ) : (
-                  <p className="text-sm text-stone-500">Official timings not available.</p>
+                  <p className="text-sm text-stone-500">Live timings not available from Google.</p>
                 )}
               </div>
               
               <div>
                 <h3 className="font-bold text-stone-900 mb-4 flex items-center gap-2">
                   <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path></svg>
-                  Darshan Types
+                  Special Darshan
                 </h3>
-                {temple.darshans && temple.darshans.length > 0 ? (
+                {localTemple?.darshans && localTemple.darshans.length > 0 ? (
                   <ul className="space-y-3">
-                    {temple.darshans.map((d: any, i: number) => (
+                    {localTemple.darshans.map((d: any, i: number) => (
                       <li key={i} className="bg-stone-50 p-3 rounded border border-stone-100 flex justify-between items-center">
                         <div>
                           <p className="font-bold text-stone-900 text-sm">{d.name}</p>
@@ -162,23 +191,23 @@ export default async function TempleDetailPage({
 
           {/* Nearby Temples */}
           <NearbyTemples 
-            lat={temple.latitude || null} 
-            lng={temple.longitude || null} 
-            currentTempleId={temple.id} 
+            lat={latitude || null} 
+            lng={longitude || null} 
+            currentTempleId={localTemple?.id || ''} 
           />
 
           {/* Nearby Amenities (Monetization hooks) */}
           <NearbyServices 
-            lat={temple.latitude || null} 
-            lng={temple.longitude || null} 
+            lat={latitude || null} 
+            lng={longitude || null} 
           />
         </div>
 
         {/* Sidebar Info */}
         <div className="space-y-6">
-          {temple.latitude && temple.longitude && (
+          {latitude && longitude && (
             <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-2 h-64 relative">
-              <TempleMap temple={{ lat: temple.latitude, lng: temple.longitude, name: temple.name }} />
+              <TempleMap temple={{ lat: latitude, lng: longitude, name: templeName }} />
               <div className="absolute bottom-4 right-4">
                 <button className="bg-white text-blue-600 shadow-md px-4 py-2 rounded-full font-bold text-sm hover:bg-stone-50 transition-colors flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
@@ -211,7 +240,7 @@ export default async function TempleDetailPage({
                 </div>
                 <div>
                   <p className="font-semibold text-stone-900">Primary Deity</p>
-                  <p className="text-stone-600">{temple.primaryDeity?.name || "Unknown"}</p>
+                  <p className="text-stone-600">{localTemple?.primaryDeity?.name || "Unknown"}</p>
                 </div>
               </div>
               
@@ -221,11 +250,11 @@ export default async function TempleDetailPage({
                 </div>
                 <div>
                   <p className="font-semibold text-stone-900">Region</p>
-                  <p className="text-stone-600">{temple.region?.name}</p>
+                  <p className="text-stone-600">{localTemple?.region?.name || 'Unknown'}</p>
                 </div>
               </div>
 
-              {temple.festivals && temple.festivals.length > 0 && (
+              {localTemple?.festivals && localTemple.festivals.length > 0 && (
                 <div className="flex items-start gap-3 mt-4">
                   <div className="bg-orange-50 text-orange-600 p-2 rounded-lg">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -233,7 +262,7 @@ export default async function TempleDetailPage({
                   <div>
                     <p className="font-semibold text-stone-900">Festivals</p>
                     <ul className="text-stone-600">
-                      {temple.festivals.map((f: any) => (
+                      {localTemple.festivals.map((f: any) => (
                         <li key={f.festival.id}>
                           <Link href={`/festivals/${f.festival.slug}`} className="hover:text-orange-600 hover:underline">
                             {f.festival.name}
