@@ -16,11 +16,7 @@ export async function GET(request: Request) {
       },
       include: {
         primaryDeity: true,
-        region: true,
-        images: {
-          where: { isPrimary: true },
-          take: 1
-        }
+        region: true
       },
       take: limit,
       orderBy: { isFeatured: 'desc' }
@@ -47,7 +43,7 @@ export async function POST(request: Request) {
         name: body.name,
         slug: body.slug,
         description: body.description,
-        address: body.address,
+        
         templeType: body.templeType,
         isVerified: false // Default to false pending verification
       }

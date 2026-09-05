@@ -14,7 +14,7 @@ export default async function TemplesPage() {
       }
     });
   } catch (error) {
-    console.error("DB connection error");
+    console.error("DB connection error:", error);
   }
 
   return (

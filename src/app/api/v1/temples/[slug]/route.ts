@@ -14,8 +14,6 @@ export async function GET(
         region: true,
         state: true,
         city: true,
-        images: { orderBy: { sortOrder: 'asc' } },
-        timings: true,
         darshans: { where: { isActive: true } },
         festivals: { include: { festival: true } },
         events: true,

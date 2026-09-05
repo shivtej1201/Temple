@@ -22,8 +22,7 @@ export async function GET(
                 slug: true,
                 latitude: true,
                 longitude: true,
-                city: { select: { name: true } },
-                images: { take: 1 }
+                city: { select: { name: true } }
               }
             } 
           },
