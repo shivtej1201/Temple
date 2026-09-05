@@ -61,6 +61,7 @@ export default async function LoginPage({
             }}
             className="space-y-6"
           >
+            <input type="hidden" name="redirectTo" value="/admin/dashboard" />
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-stone-700">
                 Username
