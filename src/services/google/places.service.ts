@@ -70,7 +70,7 @@ export function mapToStandardTempleResponse(place: any, localTemple: any | null)
 
 export const GooglePlacesService = {
   async searchTemples(query: string) {
-    if (!GOOGLE_API_KEY) throw new Error("Google Maps API Key is missing");
+    if (!GOOGLE_API_KEY) return [];
 
     const res = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
       method: 'POST',
@@ -98,7 +98,7 @@ export const GooglePlacesService = {
   },
 
   async findNearbyTemples(lat: number, lng: number, radiusMeters: number = 10000) {
-    if (!GOOGLE_API_KEY) throw new Error("Google Maps API Key is missing");
+    if (!GOOGLE_API_KEY) return [];
 
     const res = await fetch(`https://places.googleapis.com/v1/places:searchNearby`, {
       method: 'POST',
@@ -133,7 +133,7 @@ export const GooglePlacesService = {
   },
 
   async searchAlongRoute(encodedPolyline: string) {
-    if (!GOOGLE_API_KEY) throw new Error("Google Maps API Key is missing");
+    if (!GOOGLE_API_KEY) return [];
 
     const res = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
       method: 'POST',
@@ -164,7 +164,7 @@ export const GooglePlacesService = {
   },
 
   async getPlaceDetails(slugOrId: string) {
-    if (!GOOGLE_API_KEY) throw new Error("Google Maps API Key is missing");
+    // if (!GOOGLE_API_KEY) throw new Error("Google Maps API Key is missing");
 
     const isPlaceId = slugOrId.startsWith('p_') || !slugOrId.includes('-');
     let lookupId = slugOrId.replace('p_', '');
@@ -185,22 +185,24 @@ export const GooglePlacesService = {
     const placeIdToFetch = localTemple?.googlePlaceId || lookupId;
 
     let googleData: any = null;
-    try {
-      const res = await fetch(`https://places.googleapis.com/v1/places/${placeIdToFetch}`, {
-        method: 'GET',
-        headers: {
-          ...DEFAULT_HEADERS,
-          'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,photos,regularOpeningHours,internationalPhoneNumber,websiteUri'
+    if (GOOGLE_API_KEY) {
+      try {
+        const res = await fetch(`https://places.googleapis.com/v1/places/${placeIdToFetch}`, {
+          method: 'GET',
+          headers: {
+            ...DEFAULT_HEADERS,
+            'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,rating,userRatingCount,photos,regularOpeningHours,internationalPhoneNumber,websiteUri'
+          }
+        });
+        if (res.ok) {
+          googleData = await res.json();
+        } else {
+          const error = await res.json();
+          console.warn("Failed to fetch Google Places data:", error);
         }
-      });
-      if (res.ok) {
-        googleData = await res.json();
-      } else {
-        const error = await res.json();
-        console.warn("Failed to fetch Google Places data:", error);
+      } catch (err) {
+        console.warn("Failed to fetch Google Places data:", err);
       }
-    } catch (err) {
-      console.warn("Failed to fetch Google Places data:", err);
     }
 
     // If neither exists, it's a 404
